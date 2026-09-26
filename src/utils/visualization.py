@@ -8,7 +8,6 @@ import seaborn as sns
 import pandas as pd
 import matplotlib.patches as mpatches
 from matplotlib.patches import Ellipse
-import matplotlib.transforms as transforms
 from PIL import Image
 from matplotlib.legend_handler import HandlerTuple
 
@@ -795,6 +794,9 @@ def plot_model_prediction_comparison(
     pollutant: str = "o3",
     show_errors: bool = True,
     sample_idx: int = -100,
+    individual_model = False,
+    v_max = None,
+    v_max_errors = None
 ) -> None:
     os.makedirs(save_dir, exist_ok=True) if save_dir else None
 
@@ -804,12 +806,15 @@ def plot_model_prediction_comparison(
         "pm25": 2,
         "no2": 3
     }
-    pollutant_idx = pollutants_idx[pollutant]
+    if individual_model:
+        pollutant_idx = 0
+    else:
+        pollutant_idx = pollutants_idx[pollutant]
     n_models = len(all_results)
+    if v_max is None:
+        v_max = np.max([max(np.max(res['simulated_ground_truths'][sample_idx, pollutant_idx]), np.max(res['simulated_predictions'][sample_idx, pollutant_idx])) for res in all_results.values()])
 
-    v_max = np.max([max(np.max(res['simulated_ground_truths'][sample_idx, pollutant_idx]), np.max(res['simulated_predictions'][sample_idx, pollutant_idx])) for res in all_results.values()])
-
-    if show_errors:
+    if (show_errors) and (v_max_errors is None):
         try:
             v_max_errors = max([np.max(np.abs(res['real_local_errors'][sample_idx, pollutant_idx])) for res in all_results.values()])
         except:
@@ -880,7 +885,7 @@ def plot_model_prediction_comparison(
 def plot_distribution_comparison(save_dir: str | None = None) -> None:
     reset_theme()
 
-    real_data, _ = load_real_obs_data('vitae', sensor_type='real-random', scale=False)
+    real_data, _ = load_real_obs_data('vitae', sensor_type='real-random', scale=False, pollutant_type=pollutant_type)
     real_obs = torch.stack([obs for obs, _, _ in real_data], dim=0)
 
     training_dataset, *_ = load_vitae_data(scaling_type='none', sensor_type='real-random')
@@ -934,7 +939,7 @@ def plot_noise_effects(
 ) -> torch.Tensor:
     sns.reset_defaults()
     
-    evaluation_dataset, _ = load_real_obs_data('vitae', sensor_type='real-random', scale=False)
+    evaluation_dataset, _ = load_real_obs_data('vitae', sensor_type='real-random', scale=False, pollutant_type=pollutant_type)
     evaluation_obs = torch.stack([obs for obs, _, _ in evaluation_dataset], dim=0)
     
     training_dataset, _, _, stats = load_vitae_data(scaling_type='none', sensor_type='real-random')
@@ -2089,7 +2094,7 @@ def plot_real_timewise_error(
 
     if save_dir: os.makedirs(save_dir, exist_ok=True)
 
-    dataset, _ = load_real_obs_data(model_type="clstm", sensor_type="real-random", timesteps=8, val_set=False)
+    dataset, _ = load_real_obs_data(model_type="clstm", sensor_type="real-random", timesteps=8, val_set=False, pollutant_type=pollutant_type)
     mask = torch.stack([target_mask for _, _, target_mask in dataset], dim=0)
 
     for pol_idx in range(num_pollutants):
@@ -2140,7 +2145,7 @@ def plot_real_error_distribution(
 
     if save_dir: os.makedirs(save_dir, exist_ok=True)
 
-    dataset, _ = load_real_obs_data(model_type="clstm", sensor_type="real-random", timesteps=8, val_set=False)
+    dataset, _ = load_real_obs_data(model_type="clstm", sensor_type="real-random", timesteps=8, val_set=False, pollutant_type=pollutant_type)
     mask = torch.stack([target_mask for _, _, target_mask in dataset], dim=0)
 
     pol_x_lims = [5.0, 2.5, 3.0, 2.0]
@@ -2471,6 +2476,33 @@ def plot_grouped_paper_real_results(results: pd.DataFrame, save: bool = True):
     reset_theme()
 
 
+# The gt_image and pred_image numpy arrays have 3 dimensions, representing (time, width, height). Another feature of the data is that the gt_image array has a lot of 0 values. That's missing data that the model is supposed to predict.  However, in this function, we are going to use the ground truth data that we have to evaluate the model.
+
+
+
+# Thus, I would like this function to generate a plot  where the x axis is the gt value and the y axis is the predicted value. Ignore values pixels where gt is 0.
+
+
+
+# def plot_gt_vs_pred(
+#     all_results: dict[str, dict[str, np.ndarray]],
+#     save_dir: str,
+#     pollutant: str,
+# ) -> None:
+#     pollutants_idx = {
+#         "o3": 0,
+#         "pm10": 1,
+#         "pm25": 2,
+#         "no2": 3
+#     }
+#     pollutant_idx = pollutants_idx[pollutant]
+#     n_models = len(all_results)
+
+#     for i, (model_name, results) in enumerate(all_results.items()):
+#         gt_img = results['simulated_ground_truths'][:, pollutant_idx]
+#         pred_img = results['simulated_predictions'][:, pollutant_idx]
+
+#         print(gt_img.shape, pred_img.shape)
 def draw_ellipse(gt_valid, pred_valid, ax, model_name):
         
     # Add confidence ellipse
@@ -2493,6 +2525,7 @@ def draw_ellipse(gt_valid, pred_valid, ax, model_name):
         angle = np.degrees(np.arctan2(*eigvecs[:, 0][::-1]))
 
         width, height = 2 * 2 * np.sqrt(eigvals)
+
 
         ellipse = Ellipse((mean_x, mean_y),
                       width=width,

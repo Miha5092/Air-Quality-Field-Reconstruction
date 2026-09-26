@@ -8,6 +8,19 @@ from src.datasets.vitae_dataset import load_data, unscale
 from src.utils.training import get_vitae_loss_fn, train
 from src.utils.evaluation_pipeline import evaluate
 
+def get_free_gpu():
+    if not torch.cuda.is_available():
+        return torch.device("cpu")
+
+    free_memories = []
+
+    for i in range(torch.cuda.device_count()):
+        free, total = torch.cuda.mem_get_info(i)
+        free_memories.append(free)
+
+    gpu_id = max(range(len(free_memories)), key=lambda i: free_memories[i])
+
+    return torch.device(f"cuda:{gpu_id}")
 
 def main(
     experiment_name: str,
@@ -31,6 +44,8 @@ def main(
     noise: str = 'none',
     full_noise: bool = True,
     split_mode: str = 'monthly',
+    pollutant_type: str = 'all',
+    model_path:str = 'none'
 ):
     """
     Train a ViTAE model.
@@ -69,10 +84,12 @@ def main(
     timesteps_jump=timesteps_jump,
     noise=noise,
     full_noise=full_noise,
-    seed=seed
+    seed=seed,
+    pollutant_type=pollutant_type
     )
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = get_free_gpu()
+    print(device)
 
     model = get_model(
         model_type=model_type,
@@ -80,31 +97,35 @@ def main(
         patch_size=patch_size,
         kernel_size=kernel_size
     )
+    if epochs == 0:
+        state_dict = torch.load(model_path)
+        model.load_state_dict(state_dict)
 
-    model, _, _ = train(
-        experiment_name=experiment_name,
-        model=model,
-        epochs=epochs,
-        train_loader=DataLoader(train_dataset, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers=4),
-        val_loader=DataLoader(test_dataset, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers=4),
-        lr=lr,
-        weight_decay=weight_decay,
-        evaluation_fn=evaluate_loader,
-        loss_fn=get_vitae_loss_fn(lamda1),
-        verbose=verbose,
-        save=save_model,
-        seed=seed,
-        device=device,
-        early_stopping=early_stopping,
-    )
-
-    if epochs > 0:
-        evaluate(
-            model=model,
-            data_scaling_type=scaling_type,
-            timesteps=timesteps,
+    if epochs>0:
+        model, _, _ = train(
             experiment_name=experiment_name,
+            model=model,
+            epochs=epochs,
+            train_loader=DataLoader(train_dataset, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers=4),
+            val_loader=DataLoader(test_dataset, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers=4),
+            lr=lr,
+            weight_decay=weight_decay,
+            evaluation_fn=evaluate_loader,
+            loss_fn=get_vitae_loss_fn(lamda1),
+            verbose=verbose,
+            save=save_model,
+            seed=seed,
+            device=device,
+            early_stopping=early_stopping,
         )
+
+    #if epochs > 0:
+    #    evaluate(
+    #        model=model,
+    #        data_scaling_type=scaling_type,
+    #        timesteps=timesteps,
+    #        experiment_name=experiment_name,
+    #    )
 
     return model
 

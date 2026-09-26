@@ -155,7 +155,7 @@ def compute_SSIM(reference: np.ndarray, prediction: np.ndarray) -> List[float]:
         ref = np.transpose(reference[i], (1, 2, 0))     # (C, H, W) -> (H, W, C)
         pred = np.transpose(prediction[i], (1, 2, 0))   # (C, H, W) -> (H, W, C)
 
-        data_range = ref.max() - ref.min()
+        data_range = ref.max() - ref.min()        # <---------------- This is a problem for global
         score = structural_similarity(pred, ref, data_range=data_range, channel_axis=-1)
         scores.append(score)
     return scores
@@ -362,6 +362,7 @@ def evaluate_on_real(
     save_predictions: bool = True,
     validation_set: bool = True,
     verbose: bool = True,
+    pollutant_type: str = 'all'
 ) -> float:
     
     model_names_map = {
@@ -373,7 +374,7 @@ def evaluate_on_real(
     }
     model_type = model_names_map.get(model.__class__.__name__)
     
-    dataset, stats = load_real_data(model_type=model_type, sensor_type="real-random", timesteps=timesteps, val_set=validation_set)
+    dataset, stats = load_real_data(model_type=model_type, sensor_type="real-random", timesteps=timesteps, val_set=validation_set, pollutant_type=pollutant_type)
     dataloader = DataLoader(
         dataset,
         batch_size=64 if model_type != "clstm" else 32,

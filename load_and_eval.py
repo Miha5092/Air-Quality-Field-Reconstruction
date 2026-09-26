@@ -15,6 +15,7 @@ def eval_diffusion(
     sensor_type: str,
     seed: int,
     eval_ensemble: bool,
+    pollutant_type: str
 ):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -30,7 +31,8 @@ def eval_diffusion(
         noise="none",
         full_noise=True,
         seed=seed,
-        diffusion=True
+        diffusion=True,
+        pollutant_type=pollutant_type
     )
 
     model = get_diffusion_model(
@@ -56,6 +58,7 @@ def eval_diffusion(
             data_scaling_type="standard",
             timesteps=1,
             experiment_name=experiment_name,
+            pollutant_type=pollutant_type
         )
 
 
@@ -77,6 +80,7 @@ def main(
     noise: str,
     timesteps: int,
     eval_ensemble:bool,
+    pollutant_type:str
 ):
     if model_type == "diffusion":
         eval_diffusion(
@@ -84,7 +88,8 @@ def main(
             model_path=model_path,
             sensor_type=sensor_type,
             seed=seed,
-            eval_ensemble=eval_ensemble
+            eval_ensemble=eval_ensemble,
+            pollutant_type = pollutant_type
         )
     else:
         raise ValueError(f"Unknown model type: {model_type}")
@@ -101,6 +106,7 @@ if __name__ == "__main__":
     parser.add_argument("--timesteps", type=int, default=1, help="How many consecutive timesteps to be used for a training example.")
     parser.add_argument("--noise", type=str, default="none", choices=["none", "gaussian", "perlin"])
     parser.add_argument("--ensemble", action="store_true", help="Use this to evaluate ensemble effect on diffusion model")
+    parser.add_argument("--pollutant_type", type=str, default='all', help="Pollutant types: 'o3', 'pm10', 'pm25', 'no2', 'all'")
 
     args = parser.parse_args()
 
@@ -113,4 +119,5 @@ if __name__ == "__main__":
         noise=args.noise,
         timesteps=args.timesteps,
         eval_ensemble=args.ensemble,
+        pollutant_type=args.pollutant_type
     )

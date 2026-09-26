@@ -108,14 +108,16 @@ def safe_scheduler_step(scheduler: torch.optim.lr_scheduler.LRScheduler) -> None
         scheduler.step()
 
 
-def get_dirs(model: nn.Module) -> tuple[str, str]:
+def get_dirs(model: nn.Module, pollutant_type: str) -> tuple[str, str]:
 
     model_dir_map = {
         Diffusion: "diffusion"
     }
 
-    model_dir = f"results/trained_models/{model_dir_map.get(type(model), 'unknown_model')}"
-    fig_dir = f"results/images/training/{model_dir_map.get(type(model), 'unknown_model')}"
+    model_dir = f"paper_results/trained_models/{model_dir_map.get(type(model), 'unknown_model')}/{pollutant_type}"
+    fig_dir = f"paper_results/images/training/{model_dir_map.get(type(model), 'unknown_model')}/{pollutant_type}"
+
+
 
     return model_dir, fig_dir
 
@@ -162,6 +164,7 @@ def train(
     early_stopping: bool = False,
     load_checkpoint:bool  = False,
     apply_scheduler:bool = False,
+    pollutant_type:str = 'all'
 ) -> tuple[nn.Module, list[float], list[float]]:
     """
     Trains a model for a specified number of epochs, evaluates it on a validation set, and saves the best model.
@@ -194,7 +197,7 @@ def train(
 
     # For saving the model during and after training.
 
-    model_dir, fig_dir = get_dirs(model)
+    model_dir, fig_dir = get_dirs(model, pollutant_type)
     
     os.makedirs(model_dir, exist_ok=True)
     os.makedirs(fig_dir, exist_ok=True)

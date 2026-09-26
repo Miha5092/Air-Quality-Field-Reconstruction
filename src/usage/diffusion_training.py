@@ -35,7 +35,9 @@ def main(
     full_noise: bool = True,
     split_mode: str = 'monthly',
     use_val: bool = False,
-    load_checkpoint: bool = False
+    load_checkpoint: bool = False,
+    pollutant_type: str = 'all',
+    model_path=None
 ):
     """
     Train a Diffusion model.
@@ -76,7 +78,8 @@ def main(
     noise=noise,
     full_noise=full_noise,
     seed=seed,
-    diffusion=True
+    diffusion=True,
+    pollutant_type=pollutant_type
     )
 
     if use_val:
@@ -90,32 +93,40 @@ def main(
         device = device
     )
 
-    evaluate_loader = EvaluateDiffusionModel(model.denoiser_model, model.cond_model, device=device).evaluate_model
+    if epochs==0:
+        checkpoint = torch.load(model_path, weights_only=False)
+        model.denoiser_model.load_state_dict(checkpoint['model_state_dict'])
+        model.cond_model.load_state_dict(checkpoint['cond_model_state_dict'])
 
-    model, _, _, = train(
-        experiment_name=experiment_name,
-        model=model,
-        epochs=epochs,
-        train_loader=DataLoader(train_dataset, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers=3, drop_last=True),
-        val_loader=DataLoader(test_dataset, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers=3, drop_last=True),
-        lr=lr,
-        weight_decay=weight_decay,
-        evaluation_fn=evaluate_loader,
-        loss_fn=get_voronoi_loss_fn(),
-        verbose=verbose,
-        save=save_model,
-        seed=seed,
-        device=device,
-        early_stopping=early_stopping,
-        load_checkpoint=load_checkpoint
+    if epochs>0:
+        evaluate_loader = EvaluateDiffusionModel(model.denoiser_model, model.cond_model, device=device).evaluate_model
+
+        model, _, _, = train(
+            experiment_name=experiment_name,
+            model=model,
+            epochs=epochs,
+            train_loader=DataLoader(train_dataset, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers=3, drop_last=True),
+            val_loader=DataLoader(test_dataset, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers=3, drop_last=True),
+            lr=lr,
+            weight_decay=weight_decay,
+            evaluation_fn=evaluate_loader,
+            loss_fn=get_voronoi_loss_fn(),
+            verbose=verbose,
+            save=save_model,
+            seed=seed,
+            device=device,
+            early_stopping=early_stopping,
+            load_checkpoint=load_checkpoint,
+            pollutant_type=pollutant_type
     )
-
+    '''
     if epochs > 0:
         evaluate(
             model=model,
             data_scaling_type=scaling_type,
             timesteps=timesteps,
             experiment_name=experiment_name,
+            pollutant_type=pollutant_type
         )
 
         ensemble_evaluate(
@@ -123,7 +134,9 @@ def main(
             data_scaling_type=scaling_type,
             timesteps=timesteps,
             experiment_name=experiment_name,
+            pollutant_type=pollutant_type
         )
+    '''
 
     return model
 

@@ -7,11 +7,26 @@ import logging
 from torch.utils.data import DataLoader
 
 from src.datasets.real_obs_dataset import load_data as load_real_data
+from src.datasets.real_obs_dataset_same_window import load_data as load_real_data_same_window
 from src.datasets.vitae_dataset import unscale
 from src.datasets.vitae_dataset import load_data as load_sparse_simulated
 from src.datasets.voronoi_datasets import load_data as load_voronoi_simulated
 from src.utils.evaluation import compute_relative_error, compute_rmse, compute_rrmse, compute_mean_fractional_error, compute_mean_fractional_bias, compute_SSIM
 from src.models.diffusion import EvaluateDiffusionModel
+
+def get_free_gpu():
+    if not torch.cuda.is_available():
+        return torch.device("cpu")
+
+    free_memories = []
+
+    for i in range(torch.cuda.device_count()):
+        free, total = torch.cuda.mem_get_info(i)
+        free_memories.append(free)
+
+    gpu_id = max(range(len(free_memories)), key=lambda i: free_memories[i])
+
+    return torch.device(f"cuda:{gpu_id}")
 
 @torch.no_grad()
 def evaluate(
@@ -19,24 +34,27 @@ def evaluate(
     data_scaling_type: str,
     timesteps: int,
     experiment_name: str = None,
+    pollutant_type: str = 'all',
+    same_window: bool = False,
+    inner_city: bool = True
 ) -> None:
     
-    results_on_simulated = evaluate_on_simulated(model, data_scaling_type, timesteps)
-    results_on_real = evaluate_on_real(model, data_scaling_type, timesteps)
+    results_on_simulated = evaluate_on_simulated(model, data_scaling_type, timesteps, pollutant_type)
+    results_on_real = evaluate_on_real(model, data_scaling_type, timesteps, pollutant_type, same_window, inner_city=inner_city)
     
     # Decide where to save the results
     save_dirs_map = {
-        "VCNN": "paper_results/predictions/vunet",
-        "VUnet": "paper_results/predictions/vunet",
-        "VCNN_classic": "paper_results/predictions/vcnn",
-        "ConvLSTM": "paper_results/predictions/clstm",
-        "OptimizedModule": "paper_results/predictions/clstm",
-        "ViTAE": "paper_results/predictions/vitae",
-        "Diffusion": "paper_results/predictions/diffusion"
+        "VCNN": f"paper_results/predictions/vunet/{pollutant_type}",
+        "VUnet": f"paper_results/predictions/vunet/{pollutant_type}",
+        "VCNN_classic": f"paper_results/predictions/vcnn/{pollutant_type}",
+        "ConvLSTM": f"paper_results/predictions/clstm/{pollutant_type}",
+        "OptimizedModule": f"paper_results/predictions/clstm/{pollutant_type}",
+        "ViTAE": f"paper_results/predictions/vitae/{pollutant_type}",
+        "Diffusion": f"paper_results/predictions/diffusion/{pollutant_type}"
     }
 
     # Decide where to save the results
-    preds_dir = save_dirs_map.get(model.__class__.__name__, "paper_results/predictions/unknown_model")
+    preds_dir = save_dirs_map.get(model.__class__.__name__, f"paper_results/predictions/unknown_model/{pollutant_type}")
     os.makedirs(preds_dir, exist_ok=True)
     preds_file = os.path.join(preds_dir, f"{experiment_name}_results.npz")
 
@@ -106,19 +124,20 @@ def ensemble_evaluate(
     data_scaling_type: str,
     timesteps: int,
     experiment_name: str = None,
+    pollutant_type: str = 'all'
 ) -> None:
     
     inf_size_list = [2,5,10,15,20,40]
     for idx, k in enumerate(inf_size_list):
-        results_on_simulated = evaluate_on_diffusion(model, data_scaling_type, timesteps, inf_size=k)
+        results_on_simulated = evaluate_on_diffusion(model, data_scaling_type, timesteps, inf_size=k, pollutant_type=pollutant_type)
         
         # Decide where to save the results
         save_dirs_map = {
-            "Diffusion": "paper_results/predictions/diffusion/ensemble"
+            "Diffusion": f"paper_results/predictions/diffusion/ensemble/{pollutant_type}"
         }
 
         # Decide where to save the results
-        preds_dir = save_dirs_map.get(model.__class__.__name__, "paper_results/predictions/unknown_model")
+        preds_dir = save_dirs_map.get(model.__class__.__name__, f"paper_results/predictions/unknown_model/{pollutant_type}")
         os.makedirs(preds_dir, exist_ok=True)
         preds_file = os.path.join(preds_dir, "inf_"+str(inf_size_list[idx])+"_results.npz")
 
@@ -166,20 +185,22 @@ def evaluate_on_simulated(
     model: nn.Module,
     data_scaling_type: str,
     timesteps: int,
+    pollutant_type: str
 ) -> dict:
     
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = get_free_gpu()
+    print(device)
 
     model_type = model_names_map.get(model.__class__.__name__)
     
     if model_type == "vitae":
-        _, _, dataset, stats = load_sparse_simulated(sensor_type="real-random", scaling_type=data_scaling_type, timesteps=timesteps)
+        _, _, dataset, stats = load_sparse_simulated(sensor_type="real-random", scaling_type=data_scaling_type, timesteps=timesteps, pollutant_type=pollutant_type)
     elif model_type == "clstm":
-        _, _, dataset, stats = load_voronoi_simulated(sensor_type="real-random", scaling_type=data_scaling_type, timesteps=timesteps, channel_timesteps=False)
+        _, _, dataset, stats = load_voronoi_simulated(sensor_type="real-random", scaling_type=data_scaling_type, timesteps=timesteps, channel_timesteps=False, pollutant_type=pollutant_type)
     elif model_type == "diffusion":
-        _, _, dataset, stats = load_voronoi_simulated(sensor_type="real-random", scaling_type=data_scaling_type, timesteps=timesteps, channel_timesteps=True, diffusion=True)
+        _, _, dataset, stats = load_voronoi_simulated(sensor_type="real-random", scaling_type=data_scaling_type, timesteps=timesteps, channel_timesteps=True, diffusion=True, pollutant_type=pollutant_type)
     else:
-        _, _, dataset, stats = load_voronoi_simulated(sensor_type="real-random", scaling_type=data_scaling_type, timesteps=timesteps, channel_timesteps=True)
+        _, _, dataset, stats = load_voronoi_simulated(sensor_type="real-random", scaling_type=data_scaling_type, timesteps=timesteps, channel_timesteps=True, pollutant_type=pollutant_type)
 
     dataloader = DataLoader(
         dataset,
@@ -249,11 +270,11 @@ def evaluate_on_simulated(
 
     # ------- Compute the metrics -------
 
-    return compute_simulated_metrics(observations, ground_truths, predictions)
+    return compute_simulated_metrics(observations, ground_truths, predictions, pollutant_type)
 
 
-def compute_simulated_metrics(observations, ground_truths,predictions) -> dict:
-    global_re = np.mean(compute_relative_error(ground_truths, predictions))
+def compute_simulated_metrics(observations, ground_truths,predictions, pollutant_type) -> dict:
+    global_re = compute_relative_error(ground_truths, predictions)
     global_rmse = compute_rmse(ground_truths, predictions, None)
     global_rrmse = compute_rrmse(ground_truths, predictions, None)
     global_mfe = compute_mean_fractional_error(ground_truths, predictions, None)
@@ -262,23 +283,24 @@ def compute_simulated_metrics(observations, ground_truths,predictions) -> dict:
 
     # These metrics are computed for each pollutant separately
     pollutants_re, pollutants_rmse, pollutants_rrmse, pollutants_mfe, pollutants_mfb, pollutants_ssim = [], [], [], [], [], []
-    for i in range(4):
-        pollutant_ground_truths = ground_truths[:, i]
-        pollutant_predictions = predictions[:, i]
+    if pollutant_type == 'all':
+        for i in range(4):
+            pollutant_ground_truths = ground_truths[:, i]
+            pollutant_predictions = predictions[:, i]
 
-        pollutant_re = np.mean(compute_relative_error(pollutant_ground_truths, pollutant_predictions))    
-        pollutant_rmse = compute_rmse(pollutant_ground_truths, pollutant_predictions, None)
-        pollutant_rrmse = compute_rrmse(pollutant_ground_truths, pollutant_predictions, None)
-        pollutant_mfe = compute_mean_fractional_error(pollutant_ground_truths, pollutant_predictions, None)
-        pollutant_mfb = compute_mean_fractional_bias(pollutant_ground_truths, pollutant_predictions, None)
-        pollutant_ssim = np.mean(compute_SSIM(pollutant_ground_truths.numpy()[:, np.newaxis], pollutant_predictions.numpy()[:, np.newaxis]))
+            pollutant_re = compute_relative_error(pollutant_ground_truths, pollutant_predictions)
+            pollutant_rmse = compute_rmse(pollutant_ground_truths, pollutant_predictions, None)
+            pollutant_rrmse = compute_rrmse(pollutant_ground_truths, pollutant_predictions, None)
+            pollutant_mfe = compute_mean_fractional_error(pollutant_ground_truths, pollutant_predictions, None)
+            pollutant_mfb = compute_mean_fractional_bias(pollutant_ground_truths, pollutant_predictions, None)
+            pollutant_ssim = np.mean(compute_SSIM(pollutant_ground_truths.numpy()[:, np.newaxis], pollutant_predictions.numpy()[:, np.newaxis]))
 
-        pollutants_re.append(pollutant_re)
-        pollutants_rmse.append(pollutant_rmse)
-        pollutants_rrmse.append(pollutant_rrmse)
-        pollutants_mfe.append(pollutant_mfe)
-        pollutants_mfb.append(pollutant_mfb)
-        pollutants_ssim.append(pollutant_ssim)
+            pollutants_re.append(pollutant_re)
+            pollutants_rmse.append(pollutant_rmse)
+            pollutants_rrmse.append(pollutant_rrmse)
+            pollutants_mfe.append(pollutant_mfe)
+            pollutants_mfb.append(pollutant_mfb)
+            pollutants_ssim.append(pollutant_ssim)
 
     return {
         # Save the data used to compute the metrics
@@ -311,13 +333,19 @@ def evaluate_on_real(
     model: nn.Module,
     data_scaling_type: str,
     timesteps: int,
+    pollutant_type: str,
+    same_window: bool = False,
+    inner_city: bool = True
 ) -> dict:
     
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = get_free_gpu()
+    print(device)
 
     model_type = model_names_map.get(model.__class__.__name__)
-    
-    dataset, stats = load_real_data(model_type=model_type, sensor_type="real-random", timesteps=timesteps, val_set=False)
+    if same_window:
+        dataset, stats = load_real_data_same_window(model_type=model_type, sensor_type="real-random", timesteps=timesteps, val_set=False, pollutant_type=pollutant_type, inner_city=inner_city)
+    else:
+        dataset, stats = load_real_data(model_type=model_type, sensor_type="real-random", timesteps=timesteps, val_set=False, pollutant_type=pollutant_type)
     dataloader = DataLoader(
         dataset,
         batch_size=64 if model_type != "clstm" else 32,
@@ -377,11 +405,11 @@ def evaluate_on_real(
     predictions = torch.from_numpy(np.concatenate(predictions).astype(np.float32))
 
     # ------- Compute the metrics -------
-    return compute_real_metrics(observations, ground_truths, predictions, target_masks)
+    return compute_real_metrics(observations, ground_truths, predictions, target_masks, pollutant_type)
 
 
-def compute_real_metrics(observations: np.array, ground_truths: torch.Tensor, predictions: torch.Tensor, target_masks: torch.Tensor) -> dict:
-    global_re = np.mean(compute_relative_error(ground_truths * target_masks, predictions * target_masks))
+def compute_real_metrics(observations: np.array, ground_truths: torch.Tensor, predictions: torch.Tensor, target_masks: torch.Tensor, pollutant_type) -> dict:
+    global_re = compute_relative_error(ground_truths * target_masks, predictions * target_masks)
     global_rmse = compute_rmse(ground_truths, predictions, target_masks)
     global_rrmse = compute_rrmse(ground_truths, predictions, target_masks)
     global_mfe = compute_mean_fractional_error(ground_truths, predictions, target_masks)
@@ -389,22 +417,23 @@ def compute_real_metrics(observations: np.array, ground_truths: torch.Tensor, pr
 
     # These metrics are computed for each pollutant separately
     pollutants_re, pollutants_rmse, pollutants_rrmse, pollutants_mfe, pollutants_mfb = [], [], [], [], []
-    for i in range(4):
-        pollutant_ground_truths = ground_truths[:, i]
-        pollutant_predictions = predictions[:, i]
-        pollutant_target_masks = target_masks[:, i]
+    if pollutant_type == 'all':
+        for i in range(4):
+            pollutant_ground_truths = ground_truths[:, i]
+            pollutant_predictions = predictions[:, i]
+            pollutant_target_masks = target_masks[:, i]
 
-        pollutant_re = np.mean(compute_relative_error(pollutant_ground_truths * pollutant_target_masks, pollutant_predictions * pollutant_target_masks))    
-        pollutant_rmse = compute_rmse(pollutant_ground_truths, pollutant_predictions, pollutant_target_masks)
-        pollutant_rrmse = compute_rrmse(pollutant_ground_truths, pollutant_predictions, pollutant_target_masks)
-        pollutant_mfe = compute_mean_fractional_error(pollutant_ground_truths, pollutant_predictions, pollutant_target_masks)
-        pollutant_mfb = compute_mean_fractional_bias(pollutant_ground_truths, pollutant_predictions, pollutant_target_masks)
+            pollutant_re = compute_relative_error(pollutant_ground_truths * pollutant_target_masks, pollutant_predictions * pollutant_target_masks)
+            pollutant_rmse = compute_rmse(pollutant_ground_truths, pollutant_predictions, pollutant_target_masks)
+            pollutant_rrmse = compute_rrmse(pollutant_ground_truths, pollutant_predictions, pollutant_target_masks)
+            pollutant_mfe = compute_mean_fractional_error(pollutant_ground_truths, pollutant_predictions, pollutant_target_masks)
+            pollutant_mfb = compute_mean_fractional_bias(pollutant_ground_truths, pollutant_predictions, pollutant_target_masks)
 
-        pollutants_re.append(pollutant_re)
-        pollutants_rmse.append(pollutant_rmse)
-        pollutants_rrmse.append(pollutant_rrmse)
-        pollutants_mfe.append(pollutant_mfe)
-        pollutants_mfb.append(pollutant_mfb)
+            pollutants_re.append(pollutant_re)
+            pollutants_rmse.append(pollutant_rmse)
+            pollutants_rrmse.append(pollutant_rrmse)
+            pollutants_mfe.append(pollutant_mfe)
+            pollutants_mfb.append(pollutant_mfb)
 
     return {
         # Save the data used to compute the metrics
@@ -433,13 +462,16 @@ def compute_real_metrics(observations: np.array, ground_truths: torch.Tensor, pr
 def evaluate_on_diffusion(model: nn.Module,
     data_scaling_type: str,
     timesteps: int,
-    inf_size: int):
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    inf_size: int,
+    pollutant_type: str):
+
+    device = get_free_gpu()
+    print(device)
 
     model_type = model_names_map.get(model.__class__.__name__)
     
     if model_type == "diffusion":
-        _, _, dataset, stats = load_voronoi_simulated(sensor_type="real-random", scaling_type=data_scaling_type, timesteps=timesteps, channel_timesteps=True, diffusion=True)
+        _, _, dataset, stats = load_voronoi_simulated(sensor_type="real-random", scaling_type=data_scaling_type, timesteps=timesteps, channel_timesteps=True, diffusion=True, pollutant_type=pollutant_type)
 
     dataloader = DataLoader(
         dataset,
@@ -511,37 +543,38 @@ def evaluate_on_diffusion(model: nn.Module,
 
     # These metrics are computed for each pollutant separately
     pollutants_re, pollutants_rmse, pollutants_rrmse, pollutants_mfe, pollutants_mfb, pollutants_ssim = [], [], [], [], [], []
-    for k in range(20):
-        pollutants_re_k = []
-        pollutants_rmse_k = []
-        pollutants_rrmse_k = []
-        pollutants_mfe_k = []
-        pollutants_mfb_k = []
-        pollutants_ssim_k = []
-        for i in range(4):
-            pollutant_ground_truths = ground_truths[:, i]
-            pollutant_predictions = predictions[k][:, i]
+    if pollutant_type == 'all':
+        for k in range(20):
+            pollutants_re_k = []
+            pollutants_rmse_k = []
+            pollutants_rrmse_k = []
+            pollutants_mfe_k = []
+            pollutants_mfb_k = []
+            pollutants_ssim_k = []
+            for i in range(4):
+                pollutant_ground_truths = ground_truths[:, i]
+                pollutant_predictions = predictions[k][:, i]
 
-            pollutant_re_k = np.mean(compute_relative_error(pollutant_ground_truths, pollutant_predictions))    
-            pollutant_rmse_k = compute_rmse(pollutant_ground_truths, pollutant_predictions, None)
-            pollutant_rrmse_k = compute_rrmse(pollutant_ground_truths, pollutant_predictions, None)
-            pollutant_mfe_k = compute_mean_fractional_error(pollutant_ground_truths, pollutant_predictions, None)
-            pollutant_mfb_k = compute_mean_fractional_bias(pollutant_ground_truths, pollutant_predictions, None)
-            pollutant_ssim_k = np.mean(compute_SSIM(pollutant_ground_truths.numpy()[:, np.newaxis], pollutant_predictions.numpy()[:, np.newaxis]))   
+                pollutant_re_k = np.mean(compute_relative_error(pollutant_ground_truths, pollutant_predictions))    
+                pollutant_rmse_k = compute_rmse(pollutant_ground_truths, pollutant_predictions, None)
+                pollutant_rrmse_k = compute_rrmse(pollutant_ground_truths, pollutant_predictions, None)
+                pollutant_mfe_k = compute_mean_fractional_error(pollutant_ground_truths, pollutant_predictions, None)
+                pollutant_mfb_k = compute_mean_fractional_bias(pollutant_ground_truths, pollutant_predictions, None)
+                pollutant_ssim_k = np.mean(compute_SSIM(pollutant_ground_truths.numpy()[:, np.newaxis], pollutant_predictions.numpy()[:, np.newaxis]))   
 
-            pollutants_re_k.append(pollutant_re_k)
-            pollutants_rmse_k.append(pollutant_rmse_k)
-            pollutants_rrmse_k.append(pollutant_rrmse_k)
-            pollutants_mfe_k.append(pollutant_mfe_k)
-            pollutants_mfb_k.append(pollutant_mfb_k)
-            pollutants_ssim_k.append(pollutant_ssim_k)
+                pollutants_re_k.append(pollutant_re_k)
+                pollutants_rmse_k.append(pollutant_rmse_k)
+                pollutants_rrmse_k.append(pollutant_rrmse_k)
+                pollutants_mfe_k.append(pollutant_mfe_k)
+                pollutants_mfb_k.append(pollutant_mfb_k)
+                pollutants_ssim_k.append(pollutant_ssim_k)
 
-        pollutants_re.append(pollutants_re_k)
-        pollutants_rmse.append(pollutants_rmse_k)
-        pollutants_rrmse.append(pollutants_rrmse_k)
-        pollutants_mfe.append(pollutants_mfe_k)
-        pollutants_mfb.append(pollutants_mfb_k)
-        pollutants_ssim.append(pollutants_ssim_k)
+            pollutants_re.append(pollutants_re_k)
+            pollutants_rmse.append(pollutants_rmse_k)
+            pollutants_rrmse.append(pollutants_rrmse_k)
+            pollutants_mfe.append(pollutants_mfe_k)
+            pollutants_mfb.append(pollutants_mfb_k)
+            pollutants_ssim.append(pollutants_ssim_k)
 
     return {
         # Save the data used to compute the metrics
@@ -564,6 +597,83 @@ def evaluate_on_diffusion(model: nn.Module,
         "global_ssim": global_ssim,
         "pollutants_ssim": pollutants_ssim
     }
+
+@torch.no_grad()
+def uq_for_diffusion(
+    model: nn.Module,
+    data_scaling_type: str,
+    timesteps: int,
+    pollutant_type: str
+) -> dict:
+    
+    device = get_free_gpu()
+    print(device)
+
+    model_type = model_names_map.get(model.__class__.__name__)
+    
+    dataset, stats = load_real_data(model_type=model_type, sensor_type="real-random", timesteps=timesteps, val_set=False, pollutant_type=pollutant_type)
+    dataloader = DataLoader(
+        dataset,
+        batch_size=64 if model_type != "clstm" else 32,
+        shuffle=False
+    )
+    if model_type == "diffusion":
+        model_eval = EvaluateDiffusionModel(model.denoiser_model, model.cond_model, device=device)
+    else:
+        model.eval()
+        model.to(device)
+
+    observations, ground_truths, predictions, target_masks = [], [], [], []
+
+    with torch.no_grad():
+        for obs, ground_truth, target_mask in dataloader:
+            if model_type == "diffusion":
+                obs_mask = obs[1].to(device).float()
+                obs = obs[0].to(device).float()
+                preds = model_eval.all_ensemble_output(obs*obs_mask, obs_mask, obs, num_inf_steps=10, num_ensem_steps=20, device=device)
+            else:
+                obs = obs.to(device).float()
+                preds = model(obs)
+            # The diffusion model outputs all the samples from ensemble [1,E]
+
+            # Scale the data back to its original values
+            if model_type == "diffusion":
+                channel_count = stats["data_std"].shape[1]
+            else:
+                channel_count = stats["data_min"].shape[1]
+            obs_shape = obs.shape
+
+            obs = unscale(obs.reshape(-1, channel_count, obs.shape[-2], obs.shape[-1]).cpu().detach().numpy(), data_scaling_type, **stats).reshape(*obs_shape)
+            ground_truth = unscale(ground_truth.float().numpy(), data_scaling_type, **stats)
+            target_mask = target_mask.float().numpy()
+            for k in range(20):
+                preds[k] = unscale(preds[k].cpu().detach().numpy(), data_scaling_type, **stats)
+            preds = np.concatenate(preds).astype(np.float32)
+
+            # Store the observations, ground truth, target masks, and predictions
+            observations.append(obs)
+            ground_truths.append(ground_truth)
+            target_masks.append(target_mask)
+            predictions.append(preds)
+
+    observations = np.concatenate(observations).astype(np.float32)
+    ground_truths = torch.from_numpy(np.concatenate(ground_truths).astype(np.float32))
+    target_masks = torch.from_numpy(np.concatenate(target_masks).astype(np.float32))
+    predictions = torch.from_numpy(np.concatenate(predictions).astype(np.float32))
+
+    preds_dir = f"paper_results/predictions/diffusion"
+    os.makedirs(preds_dir, exist_ok=True)
+    preds_file = os.path.join(preds_dir, f"ensemble_preds.npz")
+
+    np.savez_compressed(
+                preds_file,
+                # ------ Saving the results on the real data ------
+                real_global_observations=observations,
+                real_global_ground_truths=ground_truths,
+                real_global_target_masks=target_masks,
+                real_global_predictions=predictions
+            )
+
 
 def _convert_stats(stats: dict[str, any]) -> dict:
     """

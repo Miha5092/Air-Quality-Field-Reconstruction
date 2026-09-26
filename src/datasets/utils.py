@@ -10,39 +10,73 @@ from pytorch_lightning import seed_everything
 from src.utils.voronoi import voronoi_tessellation, batched_voronoi_tessellation
 
 
-def read_voronoi_data(sensor_type: str, sensor_number: int, seed: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def read_voronoi_data(sensor_type: str, sensor_number: int, seed: int, pollutant_type: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Reads the data based on the sensor type and number, and returns the modalities and their corresponding labels.
     Args:
         sensor_type (str): Type of sensor data to use ('real', 'real-random', 'realistic', 'random', 'fixed-random', 'fixed').
         sensor_number (int): The number of sensors to consider for fixed or fixed-random types.
         seed (int): Random seed for reproducibility when generating random masks.
+        pollutant_type (str): 'all' for all pollutants. 'o3','pm10','pm25','no2' for individual pollutants
     Returns:
         tuple: A tuple containing:
             - all_modalities (np.ndarray): The modalities data.
             - all_modalities_Y (np.ndarray): The labels corresponding to the modalities.
             - mask (np.ndarray): The sensor mask.
     """
-    
-    d_polair_o3 = np.load('data/d_polair_O3.npy')
-    d_polair_pm10 = np.load('data/d_polair_PM10.npy')
-    d_polair_pm25 = np.load('data/d_polair_PM25.npy')
-    d_polair_no2 = np.load('data/d_polair_NO2.npy')
+    if pollutant_type == 'o3':
+        all_modalities_Y = np.load('data/d_polair_O3.npy')
 
-    all_modalities_Y = np.concatenate((d_polair_o3, d_polair_pm10, d_polair_pm25, d_polair_no2), axis=1)
+    elif pollutant_type == 'pm10':
+        all_modalities_Y = np.load('data/d_polair_PM10.npy')
+
+    elif pollutant_type == 'pm25':
+        all_modalities_Y = np.load('data/d_polair_PM25.npy')
+
+    elif pollutant_type == 'no2':
+        all_modalities_Y = np.load('data/d_polair_NO2.npy')
+
+    elif pollutant_type == 'all':
+        d_polair_o3 = np.load('data/d_polair_O3.npy')
+        d_polair_pm10 = np.load('data/d_polair_PM10.npy')
+        d_polair_pm25 = np.load('data/d_polair_PM25.npy')
+        d_polair_no2 = np.load('data/d_polair_NO2.npy')
+        all_modalities_Y = np.concatenate((d_polair_o3, d_polair_pm10, d_polair_pm25, d_polair_no2), axis=1)
 
     if sensor_type in ['real', 'realistic']:
-        all_modalities = np.load('data/voronoi_real.npy')
 
+        all_modalities = np.load('data/voronoi_real.npy')
         mask = read_realistic_sensor_mask(all_modalities[0].shape)
+
+        if pollutant_type == 'o3':
+            all_modalities = np.expand_dims(all_modalities[:,0,:,:], axis=1)
+            mask = mask[0, :, :].unsqueeze(0)
+        elif pollutant_type == 'pm10':
+            all_modalities = np.expand_dims(all_modalities[:,1,:,:], axis=1)
+            mask = mask[1, :, :].unsqueeze(0)
+        elif pollutant_type == 'pm25':
+            all_modalities = np.expand_dims(all_modalities[:,2,:,:], axis=1)
+            mask = mask[2, :, :].unsqueeze(0)
+        elif pollutant_type == 'no2':
+            all_modalities = np.expand_dims(all_modalities[:,3,:,:], axis=1)
+            mask = mask[3, :, :].unsqueeze(0)
 
         if sensor_type == 'real':
             real_data = torch.from_numpy(read_real_observation_files())
             real_sensor_positions = real_data != 0
 
             mask = real_sensor_positions * mask.unsqueeze(0)
+
     elif sensor_type == 'real-random':
         mask = torch.from_numpy(np.load('data/real/real_random_obs_mask.npy'))
+        if pollutant_type == 'o3':
+            mask = mask[:,0,:,:].unsqueeze(1)
+        elif pollutant_type == 'pm10':
+            mask = mask[:,1,:,:].unsqueeze(1)
+        elif pollutant_type == 'pm25':
+            mask = mask[:,2,:,:].unsqueeze(1)
+        elif pollutant_type == 'no2':
+            mask = mask[:,3,:,:].unsqueeze(1)
 
         all_modalities_Y = torch.from_numpy(all_modalities_Y)
         all_modalities = batched_voronoi_tessellation(mask[:len(all_modalities_Y)], all_modalities_Y)
@@ -211,9 +245,9 @@ def split_sensor_mask_into_two(mask: torch.Tensor) -> tuple[torch.Tensor, torch.
     return without_two_points, with_two_points
 
 
-def get_data_splits(sensor_type: str = 'real-random', seed: int = 42) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+def get_data_splits(sensor_type: str = 'real-random', seed: int = 42, pollutant_type: str = 'all') -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
 
-    _, all_modalities_Y, _ = read_voronoi_data(sensor_type, 30, seed)
+    _, all_modalities_Y, _ = read_voronoi_data(sensor_type, 30, seed, pollutant_type)
 
     n_samples = all_modalities_Y.shape[0]
     train_indices, val_indices, test_indices = train_val_test_split("monthly", n_samples, 0.1, 0.1, False)

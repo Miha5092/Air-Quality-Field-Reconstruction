@@ -51,7 +51,7 @@ def kriging_interpolate_image(
 
     # if too few points, skip
     if len(values) < 3:
-        return img.copy()
+        return img.copy(), np.zeros_like(img, dtype=float)
 
     # build the Ordinary Kriging model with hyperparameters
     OK = OrdinaryKriging(
@@ -71,8 +71,8 @@ def kriging_interpolate_image(
 
     grid_x = np.arange(w, dtype=float)
     grid_y = np.arange(h, dtype=float)
-    z_interp, _ = OK.execute("grid", grid_x, grid_y)
-    return z_interp
+    z_interp, krig_variance = OK.execute("grid", grid_x, grid_y)
+    return z_interp, krig_variance
 
 
 def kriging_interpolate_tensor(
@@ -86,9 +86,11 @@ def kriging_interpolate_tensor(
     exact_values: bool
 ) -> np.ndarray:
     out = np.zeros_like(tensor_np)
+    variance = np.zeros_like(tensor_np, dtype=float)
+
     for i in range(tensor_np.shape[0]):      # time
         for c in range(tensor_np.shape[1]):  # channel
-            out[i, c] = kriging_interpolate_image(
+            pred, var = kriging_interpolate_image(
                 tensor_np[i, c],
                 variogram_model,
                 variogram_parameters,
@@ -98,7 +100,10 @@ def kriging_interpolate_tensor(
                 anisotropy_angle,
                 exact_values
             )
-    return out
+
+            out[i, c] = pred
+            variance[i,c] = var
+    return out, variance
 
 def tune_parameters(seed: int = 42, n_trials: int = 100):
 
@@ -151,7 +156,7 @@ def tune_parameters(seed: int = 42, n_trials: int = 100):
         anisotropy_angle = trial.suggest_float("anisotropy_angle", 0.0, 180.0)
         exact_values = trial.suggest_categorical("exact_values", [True, False])
 
-        pred = kriging_interpolate_tensor(
+        pred, var = kriging_interpolate_tensor(
             train_obs,
             variogram_model,
             variogram_parameters,
@@ -197,7 +202,7 @@ def tune_parameters(seed: int = 42, n_trials: int = 100):
     obs = torch.stack([obs for obs, _, _ in test_dataset]).numpy()
     gts = torch.stack([gt for _, gt, _ in test_dataset])
 
-    pred = kriging_interpolate_tensor(
+    pred, var = kriging_interpolate_tensor(
             obs,
             best_params.get("variogram_model", None),
             best_params.get("variogram_parameters", None),
@@ -238,7 +243,7 @@ def predict_real():
     gts = torch.stack([gt for _, gt, _ in dataset])
     mask = torch.stack([mask for _, _, mask in dataset])
 
-    pred = kriging_interpolate_tensor(
+    pred, var = kriging_interpolate_tensor(
         obs.numpy(),
         best_params.get("variogram_model", None),
         best_params.get("variogram_parameters", None),
@@ -267,7 +272,7 @@ def predict_real():
 
 
 def evaluate_paper_simulated():
-    best_params = torch.load("results/trained_models/kriging/params/best_params.pth")
+    best_params = torch.load("results/trained_models/kriging/best_params.pth")
 
     # Timesteps is kept at 8 for consistency with all the other models.
     _, _, dataset, _ = load_data(sensor_type="real-random", timesteps=1)
@@ -275,7 +280,7 @@ def evaluate_paper_simulated():
     obs = torch.stack([obs[-4:, :, :] for obs, _, _ in dataset])
     gts = torch.stack([gt for _, gt, _ in dataset])
 
-    pred = kriging_interpolate_tensor(
+    pred, var = kriging_interpolate_tensor(
         obs.numpy(),
         best_params.get("variogram_model", None),
         best_params.get("variogram_parameters", None),
@@ -299,7 +304,7 @@ def evaluate_paper_real():
     gts = torch.stack([gt for _, gt, _ in dataset])
     mask = torch.stack([mask for _, _, mask in dataset])
 
-    pred = kriging_interpolate_tensor(
+    pred, var = kriging_interpolate_tensor(
         obs.numpy(),
         best_params.get("variogram_model", None),
         best_params.get("variogram_parameters", None),
@@ -378,10 +383,95 @@ def evaluate_paper():
     print(f"Saved evaluation results to {preds_file}", flush=True)
 
 
+def uq_kriging():
+    # Load best Kriging parameters
+    best_params = torch.load("results/kriging/best_params.pth")
+    # Load dataset
+    dataset, _ = load_real(model_type="vitae",sensor_type="real-random",timesteps=8,scale=False)
+    # Observations used as Kriging input
+    obs = torch.stack([obs[-4:, :, :] for obs, _, _ in dataset])
+    # Ground truth
+    ground_truth = torch.stack([gt for _, gt, _ in dataset])
+    # Evaluation mask
+    target_mask = torch.stack([mask for _, _, mask in dataset])
+
+    obs_np = obs.numpy()
+    ground_truth = ground_truth.numpy()
+    target_mask = (
+        target_mask.numpy() > 0
+    ).astype(np.uint8)
+
+    # Kriging prediction + variance
+    kriging_prediction, kriging_variance = (
+        kriging_interpolate_tensor(
+        obs_np,
+        best_params["variogram_model"],
+        best_params["variogram_parameters"],
+        best_params["nlags"],
+        best_params["weight"],
+        best_params["anisotropy_scaling"],
+        best_params["anisotropy_angle"],
+        best_params["exact_values"]
+    )
+    )
+
+    # Generate Gaussian ensemble
+    rng = np.random.default_rng(seed)
+
+    kriging_variance = np.maximum(kriging_variance,0.0)
+    kriging_std = np.sqrt(kriging_variance)
+
+    N, P, H, W = kriging_prediction.shape
+
+    noise = rng.standard_normal(size=(N,20,P,H,W))
+
+    prediction_real = (kriging_prediction[:, None, ...]+ noise * kriging_std[:, None, ...])
+
+
+    # Simulation data
+    _, _, dataset, _ = load_data(sensor_type="real-random", timesteps=1, pollutant_type='all')
+
+    obs = torch.stack([obs[-4:, :, :] for obs, _, _ in dataset])
+    obs_np = obs.numpy()
+    gts = torch.stack([gt for _, gt, _ in dataset])
+    ground_truth_sim = gts.numpy()
+
+    # Kriging prediction + variance
+    kriging_prediction, kriging_variance = (
+        kriging_interpolate_tensor(
+        obs_np,
+        best_params["variogram_model"],
+        best_params["variogram_parameters"],
+        best_params["nlags"],
+        best_params["weight"],
+        best_params["anisotropy_scaling"],
+        best_params["anisotropy_angle"],
+        best_params["exact_values"]
+    )
+    )
+    # Generate Gaussian ensemble
+    rng = np.random.default_rng(seed)
+    kriging_variance = np.maximum(kriging_variance,0.0)
+    kriging_std = np.sqrt(kriging_variance)
+    N, P, H, W = kriging_prediction.shape
+    noise = rng.standard_normal(size=(N,20,P,H,W))
+    prediction_sim = (kriging_prediction[:, None, ...]+ noise * kriging_std[:, None, ...])
+
+    # Save
+    np.savez_compressed(
+        "paper_results/predictions/kriging/ensemble_results.npz",
+        ground_truth_real=ground_truth,
+        prediction_real=prediction_real,
+        target_mask=target_mask,
+        ground_truth_sim=ground_truth_sim,
+        prediction_sim=prediction_sim
+    )
+
 if __name__ == "__main__":
     seed = 42
     n_trials = 100
 
     # best_params = tune_parameters(seed=seed, n_trials=n_trials)
     # predict_real()
-    evaluate_paper()
+    #evaluate_paper()
+    uq_kriging()    

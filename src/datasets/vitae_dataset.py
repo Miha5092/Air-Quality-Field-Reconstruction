@@ -222,7 +222,8 @@ def load_data(
     timesteps_jump: int = 1,
     seed: int = 42,
     noise: str = 'none',
-    full_noise: bool = True
+    full_noise: bool = True,
+    pollutant_type: str = 'all'
 ) -> tuple[VitaeDataset, VitaeDataset, VitaeDataset, dict[str, np.ndarray]]:
     """
     Load the Vitae dataset and return train, validation, and test datasets.
@@ -251,12 +252,24 @@ def load_data(
     seed_everything(seed=42, verbose=False)
 
     # Load the dataset
-    d_polair_o3 = np.load('data/d_polair_O3.npy')
-    d_polair_pm10 = np.load('data/d_polair_PM10.npy')
-    d_polair_pm25 = np.load('data/d_polair_PM25.npy')
-    d_polair_no2 = np.load('data/d_polair_NO2.npy')
+    if pollutant_type == 'o3':
+        all_modalities = np.load('data/d_polair_O3.npy')
 
-    all_modalities = np.concatenate((d_polair_o3, d_polair_pm10, d_polair_pm25, d_polair_no2), axis=1)
+    elif pollutant_type == 'pm10':
+        all_modalities = np.load('data/d_polair_PM10.npy')
+
+    elif pollutant_type == 'pm25':
+        all_modalities = np.load('data/d_polair_PM25.npy')
+
+    elif pollutant_type == 'no2':
+        all_modalities = np.load('data/d_polair_NO2.npy')
+
+    elif pollutant_type == 'all':
+        d_polair_o3 = np.load('data/d_polair_O3.npy')
+        d_polair_pm10 = np.load('data/d_polair_PM10.npy')
+        d_polair_pm25 = np.load('data/d_polair_PM25.npy')
+        d_polair_no2 = np.load('data/d_polair_NO2.npy')
+        all_modalities = np.concatenate((d_polair_o3, d_polair_pm10, d_polair_pm25, d_polair_no2), axis=1)
 
     # Splitting the dataset into train, val, and test
     n_samples = all_modalities.shape[0]
@@ -269,6 +282,14 @@ def load_data(
 
     # Obtain the sensor mask
     mask = obtain_mask(X_train, sensor_type, sensor_number, seed)
+    if pollutant_type == 'o3':
+        mask = mask[:, 0, :, :].unsqueeze(1)
+    elif pollutant_type == 'pm10':
+        mask = mask[:, 1, :, :].unsqueeze(1)
+    elif pollutant_type == 'pm25':
+        mask = mask[:, 2, :, :].unsqueeze(1)
+    elif pollutant_type == 'no2':
+        mask = mask[:, 3, :, :].unsqueeze(1)
 
     # Compute dataset statistics for standardization
     stats = {

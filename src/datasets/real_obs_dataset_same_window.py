@@ -14,17 +14,25 @@ from src.datasets.utils import train_val_test_split, read_real_observation_files
 class RealObsDataset(Dataset):
     def __init__(
         self,
+        all_observations: np.ndarray,
         observations: np.ndarray,
         targets: np.ndarray,
+        total_mask: torch.Tensor,
         obs_mask: torch.Tensor,
         target_mask: torch.Tensor,
         model_type: str,
         timesteps: int = 1,
+        scale = None,
+        stats = None
     ):
+        self.all_observations = all_observations
         self.observations = observations
         self.targets = targets
+        self.total_mask = total_mask
         self.obs_mask = obs_mask
         self.target_mask = target_mask
+        self.scale = scale
+        self.stats = stats
 
         assert model_type in ["vitae", "vunet", "vcnn", "vunet", "clstm", "diffusion"], f"Model type {model_type} must be one of 'vitae', 'vcnn', 'vunet', or 'clstm'."
         self.model_type = model_type
@@ -34,17 +42,22 @@ class RealObsDataset(Dataset):
     def __len__(self):
         return len(self.observations) - self.timesteps + 1
 
+
+
     def __getitem__(self, idx):
-        obs = self.observations[idx: idx + self.timesteps]
-        obs_mask = self.obs_mask[idx: idx + self.timesteps]
+        target_mask = self.target_mask[idx + self.timesteps - 1]    # These are the sensors that should be excluded from previous timesteps
+        obs_mask = self.total_mask[idx: idx + self.timesteps] * (~ target_mask)
 
-        # Repeat the mask for timesteps
-        #if self.timesteps>1:
-        #    obs_mask[idx+1:] = obs_mask[idx]
-
+        obs = self.all_observations[idx: idx + self.timesteps] * obs_mask
         target = self.targets[idx + self.timesteps - 1]
-        target_mask = self.target_mask[idx + self.timesteps - 1]
-        #target_mask = self.target_mask[idx]
+
+        if self.model_type in ["vcnn", "vunet", "clstm", "diffusion"]:
+            obs = batched_voronoi_tessellation(obs_mask, obs)
+
+        if self.scale:
+            data_min = self.stats['data_min']
+            data_max = self.stats['data_max']
+            obs = (obs - data_min) / (data_max - data_min + 1e-8)
 
         # Concatenate the timesteps as extra channels
         if self.model_type != "clstm":
@@ -82,7 +95,8 @@ def load_data(
     scale: bool = True,
     test_set: bool = True,
     val_set: bool = True,
-    pollutant_type: str = 'all'
+    pollutant_type: str = 'all',
+    inner_city:bool = True
 ) -> tuple[RealObsDataset, dict[str, np.ndarray]]:
     """
     
@@ -134,6 +148,29 @@ def load_data(
         obs_mask = torch.from_numpy(np.load('data/real/real_random_obs_mask.npy'))
         target_mask = torch.from_numpy(np.load('data/real/real_random_target_mask.npy'))
 
+    H, W = target_mask.shape[-2:]
+    y, x = torch.meshgrid(
+        torch.arange(H, device=target_mask.device),
+        torch.arange(W, device=target_mask.device),
+        indexing="ij"
+    )
+    inside_city = (
+        (x >= 45) & (x <= 65) &
+        (y >= 30) & (y <= 45)
+    )
+    outside_city = ~inside_city
+    if inner_city:
+        # Keep ONLY the inner-city region
+        target_mask &= inside_city[None, None, :, :]
+    else:
+        # Remove the inner-city region
+        target_mask &= ~inside_city[None, None, :, :]
+    
+
+    total_mask = obs_mask + target_mask
+
+    all_observations = real_data * total_mask
+
     observations = real_data * obs_mask
     targets = real_data * target_mask
 
@@ -161,7 +198,10 @@ def load_data(
         )[0]
 
     observations = observations[indices]
+    all_observations = all_observations[indices]
     targets = targets[indices]
+
+    total_mask = total_mask[indices]
     obs_mask = obs_mask[indices]
     target_mask = target_mask[indices]
 
@@ -177,11 +217,6 @@ def load_data(
     elif pollutant_type == 'no2':
         observations, targets, obs_mask, target_mask = choose_pollutant(observations, targets, obs_mask, target_mask, 3)
 
-    # If we are working with a Voronoi model we need to create the map
-    if model_type in ["vcnn", "vunet", "clstm", "diffusion"]:
-        observations = batched_voronoi_tessellation(obs_mask, observations)
-
-    # Scale the real data using the statistics from the training set.    
     if scale:
         if model_type == "diffusion":
             data_mean = stats['data_mean']
@@ -191,16 +226,19 @@ def load_data(
         else:
             data_min = stats['data_min']
             data_max = stats['data_max']
-            observations = (observations - data_min) / (data_max - data_min + 1e-8)
             targets = (targets - data_min) / (data_max - data_min + 1e-8)
 
     dataset = RealObsDataset(
+        all_observations=all_observations,
         observations=observations,
         targets=targets,
+        total_mask=total_mask,
         obs_mask=obs_mask,
         target_mask=target_mask,
         model_type=model_type,
         timesteps=timesteps,
+        scale=scale,
+        stats=stats
     )
 
     return dataset, stats

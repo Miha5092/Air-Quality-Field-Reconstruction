@@ -56,7 +56,8 @@ def objective(
         noise=noise_type,
         full_noise=True,
         seed=seed,
-        noise_params=noise_params
+        noise_params=noise_params,
+        pollutant_type=pollutant_type
     )
 
     model = get_model(

@@ -1,0 +1,54 @@
+#!/bin/bash
+
+python -m experiments.real_dataset_evaluation --experiment_name t1_same_window_inner --model_types vitae --inner_city --epochs 0 --seed 0 --noise none --pollutant_type all --timesteps 1 --same_window --model_path paper_results/trained_models/vitae/t1.pth
+python -m experiments.real_dataset_evaluation --experiment_name t1_same_window_outer --model_types vitae --epochs 0 --seed 0 --noise none --pollutant_type all --timesteps 1 --same_window --model_path paper_results/trained_models/vitae/t1.pth
+
+python -m experiments.real_dataset_evaluation --experiment_name t2_same_window_inner --model_types vitae --inner_city --epochs 0 --seed 0 --noise none --pollutant_type all --timesteps 2 --same_window --model_path paper_results/trained_models/vitae/t2.pth
+python -m experiments.real_dataset_evaluation --experiment_name t3_same_window_inner --model_types vitae --inner_city --epochs 0 --seed 0 --noise none --pollutant_type all --timesteps 3 --same_window --model_path paper_results/trained_models/vitae/t3.pth
+python -m experiments.real_dataset_evaluation --experiment_name t4_same_window_inner --model_types vitae --inner_city --epochs 0 --seed 0 --noise none --pollutant_type all --timesteps 4 --same_window --model_path paper_results/trained_models/vitae/t4.pth
+python -m experiments.real_dataset_evaluation --experiment_name t6_same_window_inner --model_types vitae --inner_city --epochs 0 --seed 0 --noise none --pollutant_type all --timesteps 6 --same_window --model_path paper_results/trained_models/vitae/t6.pth
+python -m experiments.real_dataset_evaluation --experiment_name t8_same_window_inner --model_types vitae --inner_city --epochs 0 --seed 0 --noise none --pollutant_type all --timesteps 8 --same_window --model_path paper_results/trained_models/vitae/t8.pth
+python -m experiments.real_dataset_evaluation --experiment_name t12_same_window_inner --model_types vitae --inner_city --epochs 0 --seed 0 --noise none --pollutant_type all --timesteps 12 --same_window --model_path paper_results/trained_models/vitae/t12.pth
+
+python -m experiments.real_dataset_evaluation --experiment_name t2_same_window_outer --model_types vitae --epochs 0 --seed 0 --noise none --pollutant_type all --timesteps 2 --same_window --model_path paper_results/trained_models/vitae/t2.pth
+python -m experiments.real_dataset_evaluation --experiment_name t3_same_window_outer --model_types vitae --epochs 0 --seed 0 --noise none --pollutant_type all --timesteps 3 --same_window --model_path paper_results/trained_models/vitae/t3.pth
+python -m experiments.real_dataset_evaluation --experiment_name t4_same_window_outer --model_types vitae --epochs 0 --seed 0 --noise none --pollutant_type all --timesteps 4 --same_window --model_path paper_results/trained_models/vitae/t4.pth
+python -m experiments.real_dataset_evaluation --experiment_name t6_same_window_outer --model_types vitae --epochs 0 --seed 0 --noise none --pollutant_type all --timesteps 6 --same_window --model_path paper_results/trained_models/vitae/t6.pth
+python -m experiments.real_dataset_evaluation --experiment_name t8_same_window_outer --model_types vitae --epochs 0 --seed 0 --noise none --pollutant_type all --timesteps 8 --same_window --model_path paper_results/trained_models/vitae/t8.pth
+python -m experiments.real_dataset_evaluation --experiment_name t12_same_window_outer --model_types vitae --epochs 0 --seed 0 --noise none --pollutant_type all --timesteps 12 --same_window --model_path paper_results/trained_models/vitae/t12.pth
+
+#----------------------------------------------------------------------------------------------------------------------------
+python -m experiments.real_dataset_evaluation --experiment_name t1_same_window_inner --model_types vunet --inner_city --epochs 0 --seed 0 --noise none --pollutant_type all --timesteps 1 --same_window --model_path paper_results/trained_models/vunet/t1_42.pth
+python -m experiments.real_dataset_evaluation --experiment_name t1_same_window_outer --model_types vunet --epochs 0 --seed 0 --noise none --pollutant_type all --timesteps 1 --same_window --model_path paper_results/trained_models/vunet/t1_42.pth
+
+python -m experiments.real_dataset_evaluation --experiment_name t2_same_window_inner --model_types vunet --inner_city --epochs 0 --seed 0 --noise none --pollutant_type all --timesteps 2 --same_window --model_path paper_results/trained_models/vunet/t2_42.pth
+python -m experiments.real_dataset_evaluation --experiment_name t3_same_window_inner --model_types vunet --inner_city --epochs 0 --seed 0 --noise none --pollutant_type all --timesteps 3 --same_window --model_path paper_results/trained_models/vunet/t3_42.pth
+python -m experiments.real_dataset_evaluation --experiment_name t4_same_window_inner --model_types vunet --inner_city --epochs 0 --seed 0 --noise none --pollutant_type all --timesteps 4 --same_window --model_path paper_results/trained_models/vunet/t4_42.pth
+python -m experiments.real_dataset_evaluation --experiment_name t6_same_window_inner --model_types vunet --inner_city --epochs 0 --seed 0 --noise none --pollutant_type all --timesteps 6 --same_window --model_path paper_results/trained_models/vunet/t6_42.pth
+python -m experiments.real_dataset_evaluation --experiment_name t8_same_window_inner --model_types vunet --inner_city --epochs 0 --seed 0 --noise none --pollutant_type all --timesteps 8 --same_window --model_path paper_results/trained_models/vunet/t8_42.pth
+python -m experiments.real_dataset_evaluation --experiment_name t12_same_window_inner --model_types vunet --inner_city --epochs 0 --seed 0 --noise none --pollutant_type all --timesteps 12 --same_window --model_path paper_results/trained_models/vunet/t12_42.pth
+
+python -m experiments.real_dataset_evaluation --experiment_name t2_same_window_outer --model_types vunet --epochs 0 --seed 0 --noise none --pollutant_type all --timesteps 2 --same_window --model_path paper_results/trained_models/vunet/t2_42.pth
+python -m experiments.real_dataset_evaluation --experiment_name t3_same_window_outer --model_types vunet --epochs 0 --seed 0 --noise none --pollutant_type all --timesteps 3 --same_window --model_path paper_results/trained_models/vunet/t3_42.pth
+python -m experiments.real_dataset_evaluation --experiment_name t4_same_window_outer --model_types vunet --epochs 0 --seed 0 --noise none --pollutant_type all --timesteps 4 --same_window --model_path paper_results/trained_models/vunet/t4_42.pth
+python -m experiments.real_dataset_evaluation --experiment_name t6_same_window_outer --model_types vunet --epochs 0 --seed 0 --noise none --pollutant_type all --timesteps 6 --same_window --model_path paper_results/trained_models/vunet/t6_42.pth
+python -m experiments.real_dataset_evaluation --experiment_name t8_same_window_outer --model_types vunet --epochs 0 --seed 0 --noise none --pollutant_type all --timesteps 8 --same_window --model_path paper_results/trained_models/vunet/t8_42.pth
+python -m experiments.real_dataset_evaluation --experiment_name t12_same_window_outer --model_types vunet --epochs 0 --seed 0 --noise none --pollutant_type all --timesteps 12 --same_window --model_path paper_results/trained_models/vunet/t12_42.pth
+
+#----------------------------------------------------------------------------------------------------------------------------
+python -m experiments.real_dataset_evaluation --experiment_name t1_same_window_inner --model_types clstm --inner_city --epochs 0 --seed 0 --noise none --pollutant_type all --timesteps 1 --same_window --model_path paper_results/trained_models/unknown_model/t1_42.pth
+python -m experiments.real_dataset_evaluation --experiment_name t1_same_window_outer --model_types clstm --epochs 0 --seed 0 --noise none --pollutant_type all --timesteps 1 --same_window --model_path paper_results/trained_models/unknown_model/t1_42.pth
+
+python -m experiments.real_dataset_evaluation --experiment_name t2_same_window_inner --model_types clstm --inner_city --epochs 0 --seed 0 --noise none --pollutant_type all --timesteps 2 --same_window --model_path paper_results/trained_models/unknown_model/t2_42.pth
+python -m experiments.real_dataset_evaluation --experiment_name t3_same_window_inner --model_types clstm --inner_city --epochs 0 --seed 0 --noise none --pollutant_type all --timesteps 3 --same_window --model_path paper_results/trained_models/unknown_model/t3_42.pth
+python -m experiments.real_dataset_evaluation --experiment_name t4_same_window_inner --model_types clstm --inner_city --epochs 0 --seed 0 --noise none --pollutant_type all --timesteps 4 --same_window --model_path paper_results/trained_models/unknown_model/t4_42.pth
+python -m experiments.real_dataset_evaluation --experiment_name t6_same_window_inner --model_types clstm --inner_city --epochs 0 --seed 0 --noise none --pollutant_type all --timesteps 6 --same_window --model_path paper_results/trained_models/unknown_model/t6_42.pth
+python -m experiments.real_dataset_evaluation --experiment_name t8_same_window_inner --model_types clstm --inner_city --epochs 0 --seed 0 --noise none --pollutant_type all --timesteps 8 --same_window --model_path paper_results/trained_models/unknown_model/t8_42.pth
+python -m experiments.real_dataset_evaluation --experiment_name t12_same_window_inner --model_types clstm --inner_city --epochs 0 --seed 0 --noise none --pollutant_type all --timesteps 12 --same_window --model_path paper_results/trained_models/unknown_model/t12_42.pth
+
+python -m experiments.real_dataset_evaluation --experiment_name t2_same_window_outer --model_types clstm --epochs 0 --seed 0 --noise none --pollutant_type all --timesteps 2 --same_window --model_path paper_results/trained_models/unknown_model/t2_42.pth
+python -m experiments.real_dataset_evaluation --experiment_name t3_same_window_outer --model_types clstm --epochs 0 --seed 0 --noise none --pollutant_type all --timesteps 3 --same_window --model_path paper_results/trained_models/unknown_model/t3_42.pth
+python -m experiments.real_dataset_evaluation --experiment_name t4_same_window_outer --model_types clstm --epochs 0 --seed 0 --noise none --pollutant_type all --timesteps 4 --same_window --model_path paper_results/trained_models/unknown_model/t4_42.pth
+python -m experiments.real_dataset_evaluation --experiment_name t6_same_window_outer --model_types clstm --epochs 0 --seed 0 --noise none --pollutant_type all --timesteps 6 --same_window --model_path paper_results/trained_models/unknown_model/t6_42.pth
+python -m experiments.real_dataset_evaluation --experiment_name t8_same_window_outer --model_types clstm --epochs 0 --seed 0 --noise none --pollutant_type all --timesteps 8 --same_window --model_path paper_results/trained_models/unknown_model/t8_42.pth
+python -m experiments.real_dataset_evaluation --experiment_name t12_same_window_outer --model_types clstm --epochs 0 --seed 0 --noise none --pollutant_type all --timesteps 12 --same_window --model_path paper_results/trained_models/unknown_model/t12_42.pth

@@ -198,6 +198,9 @@ class VCNNDataset(Dataset):
         elif self.sensor_type in ['real', 'real-random']:
             X = self.X[idx: idx + self.timesteps: self.jump]
             mask = self.mask[idx: idx + self.timesteps: self.jump]
+            # Repeat the mask for timesteps
+            #if self.timesteps>1:
+            #    mask[idx+1:] = mask[idx]
             mask = mask.reshape(X.shape[0] * X.shape[1], X.shape[2], X.shape[3])
 
             self.get_count += 1
@@ -298,7 +301,10 @@ class VCLSTMDataset(Dataset):
 
             X = voronoi_tessellation(mask, Y)
         elif self.sensor_type in ['real', 'real-random']:
-            expanded_mask = torch.from_numpy(self.mask[idx: idx + self.timesteps: self.jump])
+            expanded_mask = self.mask[idx: idx + self.timesteps: self.jump]
+            # Same mask
+            #expanded_mask[idx+1:] = expanded_mask[idx]
+            expanded_mask = torch.from_numpy(expanded_mask)
             X = torch.from_numpy(self.X[idx: idx + self.timesteps: self.jump])
 
             if self.should_reset_noise():
@@ -443,7 +449,8 @@ def load_data(
     full_noise: bool = False,
     noise_params: dict = None,
     seed: int = 42,
-    diffusion: bool = False
+    diffusion: bool = False,
+    pollutant_type: str = 'all'
 ) -> tuple[VCNNDataset, VCNNDataset, VCNNDataset, dict[str, np.ndarray]]:
     """
     Loads the dataset based on the specified parameters and returns train, validation, and test datasets along with scaling statistics.
@@ -476,7 +483,7 @@ def load_data(
     
     seed_everything(seed=42, verbose=False)
 
-    all_modalities, all_modalities_Y, mask = read_voronoi_data(sensor_type, sensor_number, seed)
+    all_modalities, all_modalities_Y, mask = read_voronoi_data(sensor_type, sensor_number, seed, pollutant_type)
 
     n_samples = all_modalities_Y.shape[0]
 
@@ -496,9 +503,9 @@ def load_data(
     Y_train = all_modalities_Y[train_indices]
 
     stats = {
-        'Y_min': X_train.min(axis=(0, 2, 3), keepdims=True),
+        'Y_min': X_train.min(axis=(0, 2, 3), keepdims=True),           # This is the Voronoi tesselations
         'Y_max': X_train.max(axis=(0, 2, 3), keepdims=True),
-        'Y_mean': Y_train.mean(axis=(0, 2, 3), keepdims=True),
+        'Y_mean': Y_train.mean(axis=(0, 2, 3), keepdims=True),         # This is the simulation ground truth
         'Y_std': Y_train.std(axis=(0, 2, 3), keepdims=True)*2,
     }
 

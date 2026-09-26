@@ -12,6 +12,20 @@ from src.utils.evaluation_pipeline import evaluate
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
+def get_free_gpu():
+    if not torch.cuda.is_available():
+        return torch.device("cpu")
+
+    free_memories = []
+
+    for i in range(torch.cuda.device_count()):
+        free, total = torch.cuda.mem_get_info(i)
+        free_memories.append(free)
+
+    gpu_id = max(range(len(free_memories)), key=lambda i: free_memories[i])
+
+    return torch.device(f"cuda:{gpu_id}")
+
 
 def main(
     experiment_name: str,
@@ -37,6 +51,8 @@ def main(
     full_noise: bool = False,
     split_mode: str = 'monthly',
     use_val: bool = False,
+    pollutant_type: str = 'all',
+    model_path:str = 'none'
 ):
     """
     Train a VCNN model.
@@ -77,13 +93,15 @@ def main(
     channel_timesteps=model_type != "lstm",
     noise=noise,
     full_noise=full_noise,
-    seed=seed
+    seed=seed,
+    pollutant_type=pollutant_type
     )
 
     if use_val:
         test_dataset = val_dataset
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = get_free_gpu()
+    print(device)
 
     model = get_model(
         model_type=model_type,
@@ -92,31 +110,37 @@ def main(
         hidden_channels=hidden_channels,
         n_layers=n_layers
     )
+    if epochs == 0:
+        state_dict = torch.load(model_path)
+        model.load_state_dict(state_dict)
 
-    model, _, _, = train(
-        experiment_name=experiment_name,
-        model=model,
-        epochs=epochs,
-        train_loader=DataLoader(train_dataset, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers=3, drop_last=True),
-        val_loader=DataLoader(test_dataset, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers=3, drop_last=True),
-        lr=lr,
-        weight_decay=weight_decay,
-        evaluation_fn=evaluate_loader,
-        loss_fn=get_voronoi_loss_fn(),
-        verbose=verbose,
-        save=save_model,
-        seed=seed,
-        device=device,
-        early_stopping=early_stopping,
-    )
-
-    if epochs > 0:
-        evaluate(
-            model=model,
-            data_scaling_type=scaling_type,
-            timesteps=timesteps,
+    if epochs>0:
+        model, _, _, = train(
             experiment_name=experiment_name,
+            model=model,
+            epochs=epochs,
+            train_loader=DataLoader(train_dataset, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers=3, drop_last=True),
+            val_loader=DataLoader(test_dataset, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers=3, drop_last=True),
+            lr=lr,
+            weight_decay=weight_decay,
+            evaluation_fn=evaluate_loader,
+            loss_fn=get_voronoi_loss_fn(),
+            verbose=verbose,
+            save=save_model,
+            seed=seed,
+            device=device,
+            early_stopping=early_stopping,
+            pollutant_type=pollutant_type
         )
+
+    #if epochs > 0:
+    #    evaluate(
+    #        model=model,
+    #        data_scaling_type=scaling_type,
+    #        timesteps=timesteps,
+    #        experiment_name=experiment_name,
+    #        pollutant_type=pollutant_type
+    #    )
 
     return model
 

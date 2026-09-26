@@ -31,7 +31,7 @@ def get_model(train_dataset:Dataset, load_checkpoint:bool, device, weights_path:
     unet_config = {
         'sample_size': (80,112),
         'in_channels': input_channels,
-        'out_channels': unet['out_channels'],
+        'out_channels': input_channels,
         'time_embedding_type': unet['time_embedding_type'],
         'flip_sin_to_cos': unet['flip_sin_to_cos'],
         'down_block_types': unet['down_block_types'],
@@ -383,6 +383,23 @@ class EvaluateDiffusionModel():
                 ensem_output_list.append(ensemble_output/(i+1))
 
         return ensem_output_list
+
+    def all_ensemble_output(self, org_img, mask, vt, num_inf_steps, num_ensem_steps, device):
+        self.denoiser_model.eval()
+        self.cond_model.eval()
+
+        ensem_output_list = []
+        with torch.no_grad():
+            for i in range(num_ensem_steps):
+                noise_scheduler_ensem = scheduler(algorithm_type='sde-dpmsolver++')
+                org_img = org_img.to(device)
+                mask = mask.to(device)
+                vt = vt.to(device)
+
+                sample_img = self.back_sampling(org_img.shape, mask, vt, noise_scheduler_ensem, org_img, generator=None, num_inf_steps=num_inf_steps, device=org_img.device)
+                ensem_output_list.append(sample_img.cpu())
+
+        return ensem_output_list    
         
 
     def ensemble_inference_prediction(self, org_img, mask, vt, num_inf_steps, device):
